@@ -45,6 +45,13 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:44818',
+    'https://localhost:44818',
+    'http://' + CLIENT_HOST_ADDRESS,
+    'https://' + CLIENT_HOST_ADDRESS
+]
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

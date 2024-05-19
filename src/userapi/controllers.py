@@ -35,6 +35,12 @@ def handle_registration(username, email, password, message):
             hashed_email=hashed_email
         )
         account.save()
+
+        log = ServiceLog.objects.create(
+            content=f"New user {username} created with uuid {account.id}.",
+            severity=LogSeverity.LOG
+        )
+        log.save()
         return JsonResponse({'status': 'SUCCESS'})
     except IntegrityError as e:
         # If username/email conflict

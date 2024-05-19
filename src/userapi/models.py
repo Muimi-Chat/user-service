@@ -3,6 +3,7 @@ from django.utils import timezone
 import uuid
 
 from .enums.log_severity import LogSeverity
+from .enums.account_status import AccountStatus
 
 class Account(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -13,6 +14,8 @@ class Account(models.Model):
     deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(default=None, null=True)
     created_at = models.DateTimeField(default=timezone.now)
+    status = models.CharField(max_length=10, choices=AccountStatus.choices, default=AccountStatus.OK)
+    authenticated = models.BooleanField(default=False)
 
 class SessionToken(models.Model):
     account = models.ForeignKey(Account, on_delete=models.CASCADE)

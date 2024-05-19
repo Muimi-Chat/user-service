@@ -35,13 +35,3 @@ services:
     depends_on:
       - user-database
       - user-cache
-
-  pgadmin:
-    image: dpage/pgadmin4:8.6
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
-    ports:
-      - "${PGADMIN_EXTERNAL_PORT}:80"  # Mapping internal port 80 to custom external port
-    depends_on:
-      - user-database

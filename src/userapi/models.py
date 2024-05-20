@@ -17,10 +17,17 @@ class Account(models.Model):
     status = models.CharField(max_length=10, choices=AccountStatus.choices, default=AccountStatus.OK)
     authenticated = models.BooleanField(default=False)
 
+class EmailAuthenticationToken(models.Model):
+    account = models.ForeignKey(Account, on_delete=models.CASCADE)
+    hashed_token = models.CharField(max_length=128, db_index=True)
+    expire_at = models.DateTimeField()
+    created_at = models.DateTimeField(default=timezone.now)
+
 class SessionToken(models.Model):
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
     hashed_token = models.CharField(max_length=64, unique=True)
-    encrypted_client_info = models.CharField(max_length=1024)
+    encrypted_client_info = models.TextField()
+    encrypted_country = models.TextField()
     expiry_date = models.DateTimeField()
     creation_date = models.DateTimeField(default=timezone.now)
 

@@ -6,3 +6,4 @@ SQLAlchemy===2.0.23
 argon2-cffi===23.1.0
 cryptography===42.0.6
 geoip2===4.8.0
+django-cors-headers===4.3.1

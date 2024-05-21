@@ -11,6 +11,39 @@ from .enums.log_severity import LogSeverity
 
 from .controllers import handle_registration
 
+def _verify_csrf(csrf_token, user_agent, ip_address):
+    """
+    Helper function to verify the CSRF token against a User Agent.
+
+    Returns None object, if the CSRF token is valid.
+    Returns a JsonResponse object to be sent back to the client, if theres any bad CSRF
+
+    Auto-logs into the database if there are any possible CSRF Attack.
+    """
+    if not user_agent:
+        return JsonResponse({'ERROR': 'User agent is missing or empty'}, status=400)
+    if not csrf_token:
+        return JsonResponse({'ERROR': 'Missing CSRF Token'}, status=400)
+    original_user_agent = cache.get(csrf_token)
+    if original_user_agent is None:
+        return JsonResponse({'ERROR': 'Expire CSRF Token'}, status=403)
+
+    if original_user_agent != user_agent:
+        # CSRF Token did not came from the same requestor client.
+        log_message = f"Detected possible CSRF Attack on {csrf_token}, source from {ip_address} using {user_agent}; Original CSRF created by {original_user_agent}"
+        print(log_message)
+        try:
+            log = ServiceLog.objects.create(
+                content=log_message,
+                severity=LogSeverity.ERROR
+            )
+            log.save()
+        except Exception:
+            print("Failed to log the CSRF Attack into database!")
+        cache.delete(csrf_token)
+        return JsonResponse({'ERROR': 'CSRF Attack!'}, status=403)
+    return None
+
 def request_registration_csrf(request):
     """
     CSRF used for registration or login.
@@ -34,6 +67,24 @@ def request_registration_csrf(request):
     return JsonResponse({'csrfToken': csrf_token})
 
 @csrf_exempt
+def login(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'ERROR'}, status=404)
+
+    # CSRF Token Checking
+    csrf_token = request.headers.get('X-CSRFToken', '')
+    user_agent = data.get('userAgent', '')
+    ip_address = request.META.get('REMOTE_ADDR', '')
+    csrf_status = _verify_csrf(csrf_token, user_agent, ip_address)
+    if not csrf_status is None:
+        return csrf_status
+
+    username = data.get('username', '')
+    password = data.get('password', '')
+    second_fa_code = data.get('2fa_code', '')
+    return handle_registration(username, password, second_fa_code, user_agent, ip_address)
+
+@csrf_exempt
 def register(request):
     if request.method != 'POST':
         return JsonResponse({'status': 'ERROR'}, status=404)
@@ -43,29 +94,10 @@ def register(request):
     # CSRF Token Checking
     csrf_token = request.headers.get('X-CSRFToken', '')
     user_agent = data.get('userAgent', '')
-    if not user_agent:
-        return JsonResponse({'ERROR': 'User agent is missing or empty'}, status=406)
-    if not csrf_token:
-        return JsonResponse({'ERROR': 'Missing CSRF Token'}, status=406)
-    original_user_agent = cache.get(csrf_token)
-    if original_user_agent is None:
-        return JsonResponse({'ERROR': 'Expire CSRF Token'}, status=403)
-
-    if original_user_agent != user_agent:
-        # CSRF Token did not came from the same requestor client.
-        ip_address = request.META.get('REMOTE_ADDR', '')
-        log_message = f"Detected possible CSRF Attack on {csrf_token}, source from {ip_address} using {user_agent}; Original CSRF created by {original_user_agent}"
-        print(log_message)
-        try:
-            log = ServiceLog.objects.create(
-                content=log_message,
-                severity=LogSeverity.ERROR
-            )
-            log.save()
-        except Exception:
-            print("Failed to log the CSRF Attack into database!")
-        cache.delete(csrf_token)
-        return JsonResponse({'ERROR': 'CSRF Attack!'}, status=403)
+    ip_address = request.META.get('REMOTE_ADDR', '')
+    csrf_status = _verify_csrf(csrf_token, user_agent, ip_address)
+    if not csrf_status is None:
+        return csrf_status
 
     username = data.get('username', '')
     email = data.get('email', '')

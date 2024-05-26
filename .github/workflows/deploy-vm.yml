@@ -31,7 +31,8 @@ jobs:
         ssh -o StrictHostKeyChecking=no $VM_USER@$VM_IP '
           cd GITLOCAL/user-service/ && \
           git pull && \
-          docker-compose down && \
-          docker-compose -d && \
+          docker compose down && \
+          docker compose -d && \
+          sleep 10 && \
           ./migration-helper.sh 
         '

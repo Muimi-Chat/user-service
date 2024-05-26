@@ -1,19 +1,32 @@
+import os
+import secrets
 import traceback
+import datetime
+import pytz
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import JsonResponse
 from django.db import IntegrityError
 from django.core.cache import cache
+from django.utils import timezone
+from django.db import transaction
+from django.shortcuts import get_object_or_404
+from django.utils.dateparse import parse_duration
 
-from .models import Account, ServiceLog
+from .models import Account, ServiceLog, SessionToken
 from .enums.log_severity import LogSeverity
+from .enums.account_status import AccountStatus
 
 from .utils.encrypt_email import encrypt_email
 from .utils.hash_email import hash_email
 from .utils.hash_password import hash_password
 from .utils.is_valid_email import is_valid_email
 from .utils.is_valid_password import is_valid_password
-from .utils.get_account_by_username import get_account_by_username
 from .utils.verify_password import verify_password
+from .utils.get_country_from_ip import get_country_from_ip
+
+from argon2 import PasswordHasher
+from cryptography.fernet import Fernet
 
 def _cache_login_attempt(ip_address):
     """
@@ -41,34 +54,95 @@ def _cache_login_attempt(ip_address):
         return "CAPTCHA"
     return "OK"
 
+def _insert_session_token(new_token, account, client_info, country, days_until_expiry=30):
+    # Hash the token using Argon2 with a pepper
+    pepper_hex = os.environ.get('PEPPER_KEY', 'pepper-not-set')
+    pepper_bytes = bytes.fromhex(pepper_hex)
+    hasher = PasswordHasher()
+    hashed_token = hasher.hash(new_token.encode() + pepper_bytes)
+
+    # Calculate expiry date
+    current_time = timezone.now()
+    expiry_date = current_time + datetime.timedelta(days=days_until_expiry)
+
+    # encrypt country and client information...
+    cipher_suite = Fernet(os.environ.get('AES_SECRET', 'key-not-set').encode())
+    encrypted_client_info = cipher_suite.encrypt(client_info.encode()).decode()
+    encrypted_country = cipher_suite.encrypt(country.encode()).decode()
+
+    print(f"LENGTH :: {len(hashed_token)}", flush=True)
+
+    # Save the session token to the database
+    session_token = SessionToken.objects.create(
+        account=account,
+        hashed_token=hashed_token,
+        encrypted_client_info=encrypted_client_info,
+        encrypted_country=encrypted_country,
+        expiry_date=expiry_date
+    )
+    session_token.save()
+
+    log = ServiceLog.objects.create(
+        content=f"{account.username} ({account.id}) logged in with new session token.",
+        severity=LogSeverity.LOG
+    )
+    log.save()
+
+    return session_token
+
 def handle_login(username, password, second_fa_code, user_agent, ip_address):
-    login_procedural = _cache_login_attempt(ip_address)
+    try:
+        login_procedural = _cache_login_attempt(ip_address)
 
-    # TODO: Handle captcha request
-    if login_procedural == "TIMEOUT":
-        return JsonResponse({'status': 'TIMEOUT'}, status=429) 
-    
-    if len(username) < 4 or len(username) > 64:
-        return JsonResponse({'status': 'BAD_USERNAME'}, status=400)
-
-    if not is_valid_password(password):
-        return JsonResponse({'status': 'BAD_PASSWORD'}, status=400)
-
-    account = get_account_by_username(username)
-    if account is None:
-        return JsonResponse({'status': 'BAD_USERNAME'}, status=401)
-
-    if not verify_password(account.hashed_password, password):
-        return JsonResponse({'status': 'BAD_PASSWORD'}, status=401)
-
-    # TODO: Check if user is authenticated, ask user to authenticate email if not
-    # TODO: Check if user setup 2fa, request 2fa if 2fa code not given
-    # TODO: Create session token, send to user token, with current account status.
-
-    return "TODO!"
+        # TODO: Handle captcha request
+        if login_procedural == "TIMEOUT":
+            # TODO: Service warning? etc...
+            log = ServiceLog.objects.create(
+                content=f"{ip_address} attempted to login too many times into {username}.",
+                severity=LogSeverity.LOG
+            )
+            log.save()
+            return JsonResponse({'status': 'TIMEOUT'}, status=429)
         
+        if len(username) < 4 or len(username) > 64:
+            return JsonResponse({'status': 'BAD_USERNAME'}, status=400)
 
-def handle_registration(username, email, password, message):
+        if not is_valid_password(password):
+            return JsonResponse({'status': 'BAD_PASSWORD'}, status=400)
+
+        account = Account.objects.get(username=username)
+        if account is None:
+            return JsonResponse({'status': 'BAD_USERNAME'}, status=401)
+
+        if not verify_password(account.hashed_password, password):
+            return JsonResponse({'status': 'BAD_PASSWORD'}, status=401)
+
+        # TODO: Check if user is authenticated, ask user to authenticate email if not
+        # TODO: Check if user setup 2fa, request 2fa if 2fa code not given
+
+        if account.status == AccountStatus.BANNED:
+            return JsonResponse({'status': 'BANNED'}, status=401)
+        if account.status == AccountStatus.LOCKED:
+            return JsonResponse({'status': 'LOCKED'}, status=401)
+
+        # TODO: Determine if suspicious if was not previously one of the logged in countries
+        country = get_country_from_ip(ip_address)
+        session_token = secrets.token_urlsafe(32)
+        _insert_session_token(session_token, account, user_agent, country)
+        return JsonResponse({'status': 'SUCCESS', 'token': session_token}, status=200)
+    except ObjectDoesNotExist:
+        return JsonResponse({'status': 'BAD_USERNAME'}, status=401)
+    except Exception as e:
+        log_message = f"Tried to login {username}, but failed due to :: {e}\n\n{traceback.format_exc()}"
+        print(log_message, flush=True)
+        log = ServiceLog.objects.create(
+            content=log_message,
+            severity=LogSeverity.ERROR
+        )
+        log.save()
+        return JsonResponse({'status': 'ERROR'}, status=500)
+
+def handle_registration(username, email, password):
     if len(username) < 4 or len(username) > 64:
         return JsonResponse({'status': 'BAD_USERNAME'}, status=400)
 

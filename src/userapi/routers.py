@@ -9,7 +9,7 @@ from django.core.cache import cache
 from .models import ServiceLog
 from .enums.log_severity import LogSeverity
 
-from .controllers import handle_registration
+from .controllers import handle_registration, handle_login
 
 def _verify_csrf(csrf_token, user_agent, ip_address):
     """
@@ -71,6 +71,8 @@ def login(request):
     if request.method != 'POST':
         return JsonResponse({'status': 'ERROR'}, status=404)
 
+    data = json.loads(request.body)
+
     # CSRF Token Checking
     csrf_token = request.headers.get('X-CSRFToken', '')
     user_agent = data.get('userAgent', '')
@@ -82,7 +84,7 @@ def login(request):
     username = data.get('username', '')
     password = data.get('password', '')
     second_fa_code = data.get('2fa_code', '')
-    return handle_registration(username, password, second_fa_code, user_agent, ip_address)
+    return handle_login(username, password, second_fa_code, user_agent, ip_address)
 
 @csrf_exempt
 def register(request):
@@ -102,5 +104,4 @@ def register(request):
     username = data.get('username', '')
     email = data.get('email', '')
     password = data.get('password', '')
-    message = data.get('message', '')
-    return handle_registration(username, email, password, message)
+    return handle_registration(username, email, password)

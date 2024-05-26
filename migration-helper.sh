@@ -4,7 +4,7 @@
 docker-compose exec -T user-api /bin/bash << EOF
 
 # Navigate to the Django project directory
-cd /code
+cd /app/src
 
 # Perform migration
 python manage.py makemigrations userapi

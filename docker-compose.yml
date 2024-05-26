@@ -19,17 +19,20 @@ services:
       - ./redisdata:/data:z
 
   user-api:
-    build: .
+    image: python:3.12.3
     # Sleep to wait for redis/postgreSQL to initalize...
     command: >
       bash -c "
+        cd app &&
+        pip install --no-cache-dir -r requirements.txt &&
+        cd src &&
         sleep ${STARTUP_DELAY} &&
         python manage.py runserver 0.0.0.0:8000
       "
     env_file:
       - .env
     volumes:
-      - ./src:/code:z
+      - ./:/app
     ports:
       - "${DJANGO_PORT}:8000"
     depends_on:

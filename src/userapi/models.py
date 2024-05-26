@@ -25,7 +25,7 @@ class EmailAuthenticationToken(models.Model):
 
 class SessionToken(models.Model):
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
-    hashed_token = models.CharField(max_length=64, unique=True)
+    hashed_token = models.CharField(max_length=128, unique=True)
     encrypted_client_info = models.TextField()
     encrypted_country = models.TextField()
     expiry_date = models.DateTimeField()

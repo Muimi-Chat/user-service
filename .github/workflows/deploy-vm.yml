@@ -23,7 +23,8 @@ jobs:
       with:
         ssh-private-key: ${{ secrets.VM_SSH_KEY }}
 
-    - name: Deploy via SSH with DB Migrations
+    # Note, run migrations manually for database changes
+    - name: Deploy via SSH
       env:
         VM_IP: ${{ secrets.VM_IP }}
         VM_USER: ${{ secrets.VM_USER }}
@@ -32,7 +33,5 @@ jobs:
           cd GITLOCAL/user-service/ && \
           git pull && \
           docker compose down && \
-          docker compose up -d && \
-          sleep 55 && \
-          ./migration-helper.sh 
+          docker compose up -d
         '

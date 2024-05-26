@@ -32,7 +32,7 @@ jobs:
           cd GITLOCAL/user-service/ && \
           git pull && \
           docker compose down && \
-          docker compose -d && \
+          docker compose up -d && \
           sleep 10 && \
           ./migration-helper.sh 
         '

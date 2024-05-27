@@ -191,3 +191,46 @@ def handle_registration(username, email, password):
         return JsonResponse({'status': 'ERROR'}, status=500)
     # Shouldn't reach here...
     return JsonResponse({'status': 'ERROR CONTACT ADMIN'}, status=500)
+
+def validate_session_token(username, client_info, plaintext_token):
+    """
+    Validate a session token, returns the Account ORM object if successful.
+    Returns None otherwise
+    """
+    try:
+        # Retrieve the user's account based on the username
+        account = Account.objects.get(username=username)
+
+        aes_secret = os.environ.get('AES_SECRET', 'key-not-set').encode()
+        cipher_suite = Fernet(aes_secret)
+
+        # Get the pepper from the environment variable
+        pepper_hex = os.environ.get('PEPPER_KEY', 'pepper-not-set')
+        pepper_bytes = bytes.fromhex(pepper_hex)
+
+        # Iterate through all session tokens associated with the user's account
+        for session_token in SessionToken.objects.filter(account=account):
+            decrypted_client_info = cipher_suite.decrypt(session_token.encrypted_client_info.encode()).decode()
+
+            # TODO: Logging of expired token, or mismatch client information...
+            if session_token.expiry_date < timezone.now():
+                # Token is expired, delete it
+                session_token.delete()
+                continue
+
+            # Validate the hashed token against the session token's hashed token
+            if hasher.verify(session_token.hashed_token, plaintext_token.encode() + pepper_bytes):
+                if not decrypted_client_info == client_info:
+                    # Token is invalid since client information doesnt match
+                    session_token.delete()
+                    return None
+
+                # Token is valid
+                return account
+
+        # No matching valid token found
+        return None
+
+    except ObjectDoesNotExist:
+        # User account not found
+        return None

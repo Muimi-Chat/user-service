@@ -9,7 +9,7 @@ from django.core.cache import cache
 from .models import ServiceLog
 from .enums.log_severity import LogSeverity
 
-from .controllers import handle_registration, handle_login
+from .controllers import handle_registration, handle_login, validate_session_token
 
 def _verify_csrf(csrf_token, user_agent, ip_address):
     """
@@ -105,3 +105,27 @@ def register(request):
     email = data.get('email', '')
     password = data.get('password', '')
     return handle_registration(username, email, password)
+
+@csrf_exempt
+def get_user_info(request):
+    """
+    For other services to use to get user information...
+    """
+    if request.method != 'GET':
+        return JsonResponse({'status': 'ERROR'}, status=404)
+
+    session_token = request.headers.get('Session-Token', '')
+    user_agent = request.headers.get('User-Agent', '')
+    service_token = request.headers.get('Service-Token', '')
+
+    expected_service_token = os.environ.get('SERVICE_API_TOKEN', 'token-not-set')
+    if expected_service_token != service_token:
+        return JsonResponse({'status': 'ERROR'}, status=401)
+
+    username = request.GET.get('username', '')
+
+    account = validate_session_token(username, user_agent, session_token)
+    if account == None:
+        return JsonResponse({'status': 'USERNAME_NOT_FOUND'}, status=404)
+    
+    return JsonResponse({'status': 'SUCCESS', 'uuid': account.id, 'user_status': account.status, 'deleted': account.deleted, 'authenticated': account.authenticated}, status=200)

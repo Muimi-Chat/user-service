@@ -25,6 +25,7 @@ from .utils.is_valid_password import is_valid_password
 from .utils.verify_password import verify_password
 from .utils.get_country_from_ip import get_country_from_ip
 
+from argon2.exceptions import VerifyMismatchError
 from argon2 import PasswordHasher
 from cryptography.fernet import Fernet
 
@@ -216,17 +217,22 @@ def validate_session_token(username, client_info, plaintext_token):
             if session_token.expiry_date < timezone.now():
                 # Token is expired, delete it
                 session_token.delete()
+                print(f"Deleted expired token", flush=True)
                 continue
 
             # Validate the hashed token against the session token's hashed token
-            if hasher.verify(session_token.hashed_token, plaintext_token.encode() + pepper_bytes):
-                if not decrypted_client_info == client_info:
-                    # Token is invalid since client information doesnt match
-                    session_token.delete()
-                    return None
+            try:
+                hasher = PasswordHasher()
+                if hasher.verify(session_token.hashed_token, plaintext_token.encode() + pepper_bytes):
+                    if not decrypted_client_info == client_info:
+                        # Token is invalid since client information doesnt match
+                        session_token.delete()
+                        return None
 
-                # Token is valid
-                return account
+                    # Token is valid
+                    return account
+            except VerifyMismatchError:
+                continue
 
         # No matching valid token found
         return None

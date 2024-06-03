@@ -29,6 +29,7 @@ DEBUG = os.getenv("IS_RELEASE") == "FALSE"
 CLIENT_HOST_ADDRESS = os.getenv('CLIENT_HOST_ADDRESS', 'localhost')
 ALLOWED_HOSTS = [
     CLIENT_HOST_ADDRESS,
+    '127.0.0.1',
     'localhost'
 ]
 
@@ -46,8 +47,8 @@ INSTALLED_APPS = [
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:44818',
-    'https://localhost:44818',
+    'http://localhost',
+    'https://localhost',
     'http://' + CLIENT_HOST_ADDRESS,
     'https://' + CLIENT_HOST_ADDRESS
 ]

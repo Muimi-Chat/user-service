@@ -53,7 +53,7 @@ def request_registration_csrf(request):
     if request.method != 'GET':
         return JsonResponse({'status': 'ERROR'}, status=404)
 
-    user_agent = request.GET.get('userAgent', '')
+    user_agent = request.META['HTTP_USER_AGENT']
 
     if not user_agent:
         return JsonResponse({'error': 'User agent is missing or empty'}, status=406)
@@ -75,7 +75,7 @@ def login(request):
 
     # CSRF Token Checking
     csrf_token = request.headers.get('X-CSRFToken', '')
-    user_agent = data.get('userAgent', '')
+    user_agent = request.META['HTTP_USER_AGENT']
     ip_address = request.META.get('REMOTE_ADDR', '')
     csrf_status = _verify_csrf(csrf_token, user_agent, ip_address)
     if not csrf_status is None:
@@ -95,7 +95,7 @@ def register(request):
 
     # CSRF Token Checking
     csrf_token = request.headers.get('X-CSRFToken', '')
-    user_agent = data.get('userAgent', '')
+    user_agent = request.META['HTTP_USER_AGENT']
     ip_address = request.META.get('REMOTE_ADDR', '')
     csrf_status = _verify_csrf(csrf_token, user_agent, ip_address)
     if not csrf_status is None:
@@ -114,9 +114,9 @@ def get_user_info(request):
     if request.method != 'GET':
         return JsonResponse({'status': 'ERROR'}, status=404)
 
-    session_token = request.headers.get('Session-Token', '')
-    user_agent = request.headers.get('User-Agent', '')
-    service_token = request.headers.get('Service-Token', '')
+    session_token = request.headers.get('session-token', '')
+    user_agent = request.META['HTTP_USER_AGENT']
+    service_token = request.headers.get('service-token', '')
 
     expected_service_token = os.environ.get('SERVICE_API_TOKEN', 'token-not-set')
     if expected_service_token != service_token:

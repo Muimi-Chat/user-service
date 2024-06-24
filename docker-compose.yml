@@ -10,6 +10,8 @@ services:
     # Runs on port 5432 docker
     volumes:
       - ./pgdata:/var/lib/postgresql/data:z
+    networks:
+      - muimi_container_network  
 
   user-cache:
     image: redis:7.2.4
@@ -17,6 +19,8 @@ services:
     # Runs on 6379 Docker
     volumes:
       - ./redisdata:/data:z
+    networks:
+      - muimi_container_network  
 
   user-api:
     image: python:3.12.3
@@ -38,3 +42,9 @@ services:
     depends_on:
       - user-database
       - user-cache
+    networks:
+      - muimi_container_network  
+
+networks:
+  muimi_container_network:
+    external: true

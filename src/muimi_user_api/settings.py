@@ -30,7 +30,8 @@ CLIENT_HOST_ADDRESS = os.getenv('CLIENT_HOST_ADDRESS', 'localhost')
 ALLOWED_HOSTS = [
     CLIENT_HOST_ADDRESS,
     '127.0.0.1',
-    'localhost'
+    'localhost',
+    'user-api',
 ]
 
 

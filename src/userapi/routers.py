@@ -126,6 +126,6 @@ def get_user_info(request):
 
     account = validate_session_token(username, user_agent, session_token)
     if account == None:
-        return JsonResponse({'status': 'USERNAME_NOT_FOUND'}, status=404)
+        return JsonResponse({'status': 'USERNAME_NOT_FOUND'}, status=401)
     
     return JsonResponse({'status': 'SUCCESS', 'uuid': account.id, 'user_status': account.status, 'deleted': account.deleted, 'authenticated': account.authenticated}, status=200)

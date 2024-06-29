@@ -3,6 +3,7 @@ import secrets
 import traceback
 import datetime
 import pytz
+import uuid
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import JsonResponse
@@ -17,13 +18,15 @@ from .models import Account, ServiceLog, SessionToken
 from .enums.log_severity import LogSeverity
 from .enums.account_status import AccountStatus
 
-from .utils.encrypt_email import encrypt_email
 from .utils.hash_email import hash_email
 from .utils.hash_password import hash_password
 from .utils.is_valid_email import is_valid_email
 from .utils.is_valid_password import is_valid_password
 from .utils.verify_password import verify_password
 from .utils.get_country_from_ip import get_country_from_ip
+
+from .utils.request_encrypt import request_encrypt
+from .utils.request_decrypt import request_decrypt
 
 from argon2.exceptions import VerifyMismatchError
 from argon2 import PasswordHasher
@@ -66,12 +69,8 @@ def _insert_session_token(new_token, account, client_info, country, days_until_e
     current_time = timezone.now()
     expiry_date = current_time + datetime.timedelta(days=days_until_expiry)
 
-    # encrypt country and client information...
-    cipher_suite = Fernet(os.environ.get('AES_SECRET', 'key-not-set').encode())
-    encrypted_client_info = cipher_suite.encrypt(client_info.encode()).decode()
-    encrypted_country = cipher_suite.encrypt(country.encode()).decode()
-
-    print(f"LENGTH :: {len(hashed_token)}", flush=True)
+    encrypted_client_info = request_encrypt(str(account.id), client_info, str(account.id))
+    encrypted_country = request_encrypt(str(account.id), country, str(account.id))
 
     # Save the session token to the database
     session_token = SessionToken.objects.create(
@@ -154,12 +153,14 @@ def handle_registration(username, email, password):
         return JsonResponse({'status': 'BAD_PASSWORD'}, status=400)
 
     try:
+        generated_uuid = uuid.uuid4()
         hashed_email = hash_email(email)
-        encrypted_email = encrypt_email(email)
+        encrypted_email = request_encrypt(str(generated_uuid), email, str(generated_uuid))
         hashed_password = hash_password(password)
 
         # Attempt to insert into database
         account = Account.objects.create(
+            id=generated_uuid,
             username=username,
             hashed_password=hashed_password,
             encrypted_email=encrypted_email,
@@ -202,22 +203,21 @@ def validate_session_token(username, client_info, plaintext_token):
         # Retrieve the user's account based on the username
         account = Account.objects.get(username=username)
 
-        aes_secret = os.environ.get('AES_SECRET', 'key-not-set').encode()
-        cipher_suite = Fernet(aes_secret)
-
         # Get the pepper from the environment variable
         pepper_hex = os.environ.get('PEPPER_KEY', 'pepper-not-set')
         pepper_bytes = bytes.fromhex(pepper_hex)
 
         # Iterate through all session tokens associated with the user's account
         for session_token in SessionToken.objects.filter(account=account):
-            decrypted_client_info = cipher_suite.decrypt(session_token.encrypted_client_info.encode()).decode()
+            decrypted_client_info = request_decrypt(str(account.id), session_token.encrypted_client_info, str(account.id))
 
-            # TODO: Logging of expired token, or mismatch client information...
             if session_token.expiry_date < timezone.now():
-                # Token is expired, delete it
                 session_token.delete()
-                print(f"Deleted expired token", flush=True)
+                log = ServiceLog.objects.create(
+                    content=f"Session Token Expired for user :: {username} ({account.id})",
+                    severity=LogSeverity.VERBOSE
+                )
+                log.save()
                 continue
 
             # Validate the hashed token against the session token's hashed token
@@ -227,6 +227,11 @@ def validate_session_token(username, client_info, plaintext_token):
                     if not decrypted_client_info == client_info:
                         # Token is invalid since client information doesnt match
                         session_token.delete()
+                        log = ServiceLog.objects.create(
+                            content=f"Client Information Mismatch for user :: {username} ({account.id})",
+                            severity=LogSeverity.WARNING
+                        )
+                        log.save()
                         return None
 
                     # Token is valid

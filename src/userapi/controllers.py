@@ -14,7 +14,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_duration
 
-from .models import Account, ServiceLog, SessionToken
+from .models import Account, ServiceLog, SessionToken, CommonPasswords
 from .enums.log_severity import LogSeverity
 from .enums.account_status import AccountStatus
 
@@ -31,6 +31,32 @@ from .utils.request_decrypt import request_decrypt
 from argon2.exceptions import VerifyMismatchError
 from argon2 import PasswordHasher
 from cryptography.fernet import Fernet
+
+
+def _is_common_password(password: str):
+    has_rows = CommonPasswords.objects.exists()
+    if not has_rows:
+        # Bulk populate top 100 thousand common passwords from Seclist...
+        print('Populating common passwords from file...', flush=True)
+        log = ServiceLog.objects.create(
+            content='Populating common passwords from file...',
+            severity=LogSeverity.LOG
+        )
+        log.save()
+
+        passwords = []
+        static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static')
+        file_path = os.path.join(static_dir, 'xato-net-10-million-passwords-100000.txt')
+        with open(file_path, 'r') as file:
+            for line in file:
+                password_from_file = line.strip()
+                if not password_from_file:
+                    continue #empty line
+                passwords.append(CommonPasswords(password=password_from_file))
+        CommonPasswords.objects.bulk_create(passwords)
+
+    is_common = CommonPasswords.objects.filter(password=password).exists()
+    return is_common
 
 def _cache_login_attempt(ip_address):
     """
@@ -151,6 +177,9 @@ def handle_registration(username, email, password):
 
     if not is_valid_password(password):
         return JsonResponse({'status': 'BAD_PASSWORD'}, status=400)
+    
+    if _is_common_password(password):
+        return JsonResponse({'status': 'COMMON_PASSWORD'}, status=406)
 
     try:
         generated_uuid = uuid.uuid4()

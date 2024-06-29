@@ -43,3 +43,6 @@ class ServiceLog(models.Model):
     content = models.TextField()
     created_at = models.DateTimeField(default=timezone.now)
     severity = models.CharField(max_length=10, choices=LogSeverity.choices, default=LogSeverity.LOG)
+
+class CommonPasswords(models.Model):
+    password = models.CharField(max_length=128, primary_key=True)

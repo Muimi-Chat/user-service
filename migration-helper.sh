@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Connect to the Django container
-docker-compose exec -T user-api /bin/bash << EOF
+docker compose exec -T user-api /bin/bash << EOF
 
 # Navigate to the Django project directory
 cd /app/src

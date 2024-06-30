@@ -210,7 +210,7 @@ def handle_registration(username, email, password):
             return JsonResponse({'status': 'EMAIL_TAKEN'}, status=409)
     except Exception as e:
         log_message = f"Tried to register {username}, but failed due to :: {e}\n\n{traceback.format_exc()}"
-        print(log_message)
+        print(log_message, flush=True)
         log = ServiceLog.objects.create(
             content=log_message,
             severity=LogSeverity.ERROR

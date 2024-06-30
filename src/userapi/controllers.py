@@ -30,8 +30,6 @@ from .utils.request_decrypt import request_decrypt
 
 from argon2.exceptions import VerifyMismatchError
 from argon2 import PasswordHasher
-from cryptography.fernet import Fernet
-
 
 def _is_common_password(password: str):
     has_rows = CommonPasswords.objects.exists()
@@ -166,19 +164,19 @@ def handle_login(username, password, second_fa_code, user_agent, ip_address):
         return JsonResponse({'status': 'ERROR'}, status=500)
 
 def handle_registration(username, email, password):
-    if len(username) < 4 or len(username) > 64:
-        return JsonResponse({'status': 'BAD_USERNAME'}, status=400)
-
-    if not is_valid_email(email) or len(email) > 256:
-        return JsonResponse({'status': 'BAD_EMAIL'}, status=400)
-
-    if not is_valid_password(password):
-        return JsonResponse({'status': 'BAD_PASSWORD'}, status=400)
-    
-    if _is_common_password(password):
-        return JsonResponse({'status': 'COMMON_PASSWORD'}, status=406)
-
     try:
+        if len(username) < 4 or len(username) > 64:
+            return JsonResponse({'status': 'BAD_USERNAME'}, status=400)
+
+        if not is_valid_email(email) or len(email) > 256:
+            return JsonResponse({'status': 'BAD_EMAIL'}, status=400)
+
+        if not is_valid_password(password):
+            return JsonResponse({'status': 'BAD_PASSWORD'}, status=400)
+        
+        if _is_common_password(password):
+            return JsonResponse({'status': 'COMMON_PASSWORD'}, status=406)
+
         generated_uuid = uuid.uuid4()
         hashed_email = hash_email(email)
         encrypted_email = request_encrypt(str(generated_uuid), email, str(generated_uuid))
@@ -210,7 +208,7 @@ def handle_registration(username, email, password):
             return JsonResponse({'status': 'EMAIL_TAKEN'}, status=409)
     except Exception as e:
         log_message = f"Tried to register {username}, but failed due to :: {e}\n\n{traceback.format_exc()}"
-        print(log_message)
+        print(log_message, flush=True)
         log = ServiceLog.objects.create(
             content=log_message,
             severity=LogSeverity.ERROR

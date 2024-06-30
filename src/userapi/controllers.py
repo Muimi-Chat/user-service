@@ -64,7 +64,6 @@ def _cache_login_attempt(ip_address):
 
     Return Codes (string)
     - OK: Proceed to try login.
-    - CAPTCHA: Login handler should request for captcha.
     - TIMEOUT: Login handler should reject the request.
     """
     max_login_attempts = int(os.environ.get('MAX_LOGIN_ATTEMPTS', '6'))
@@ -80,8 +79,6 @@ def _cache_login_attempt(ip_address):
         return "TIMEOUT"
 
     cache.set(key, str(current_attempts), timeout_seconds)
-    if current_attempts >= (max_login_attempts / 2):
-        return "CAPTCHA"
     return "OK"
 
 def _insert_session_token(new_token, account, client_info, country, days_until_expiry=30):

@@ -6,6 +6,8 @@ from django.middleware.csrf import get_token
 from django.views.decorators.csrf import csrf_exempt
 from django.core.cache import cache
 
+from .utils.validate_cloudflare_token import validate_cloudflare_token
+
 from .models import ServiceLog
 from .enums.log_severity import LogSeverity
 
@@ -84,6 +86,11 @@ def login(request):
     username = data.get('username', '')
     password = data.get('password', '')
     second_fa_code = data.get('2fa_code', '')
+
+    cloudflare_token = data.get('cloudflare_token', '')
+    if not validate_cloudflare_token(cloudflare_token, ip_address):
+        return JsonResponse({'status': 'INVALID_CLOUDFLARE_TOKEN'}, status=401)
+
     return handle_login(username, password, second_fa_code, user_agent, ip_address)
 
 @csrf_exempt
@@ -104,6 +111,11 @@ def register(request):
     username = data.get('username', '')
     email = data.get('email', '')
     password = data.get('password', '')
+    
+    cloudflare_token = data.get('cloudflare_token', '')
+    if not validate_cloudflare_token(cloudflare_token, ip_address):
+        return JsonResponse({'status': 'INVALID_CLOUDFLARE_TOKEN'}, status=401)
+
     return handle_registration(username, email, password)
 
 @csrf_exempt

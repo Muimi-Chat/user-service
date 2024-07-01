@@ -4,6 +4,7 @@ import uuid
 
 from .enums.log_severity import LogSeverity
 from .enums.account_status import AccountStatus
+from .enums.email_token_purpose import EmailTokenPurpose
 
 class Account(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -20,6 +21,8 @@ class Account(models.Model):
 class EmailAuthenticationToken(models.Model):
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
     hashed_token = models.CharField(max_length=128, db_index=True)
+    consumed = models.BooleanField(default=False)
+    purpose = models.CharField(max_length=20, choices=EmailTokenPurpose.choices, default=EmailTokenPurpose.VERIFY)
     expire_at = models.DateTimeField()
     created_at = models.DateTimeField(default=timezone.now)
 

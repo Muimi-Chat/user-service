@@ -26,6 +26,12 @@ class EmailAuthenticationToken(models.Model):
     expire_at = models.DateTimeField()
     created_at = models.DateTimeField(default=timezone.now)
 
+# Previously used emails:
+class EmailHistoryLog(models.Model):
+    account = models.ForeignKey(Account, on_delete=models.CASCADE)
+    encrypted_email = models.CharField(max_length=256)
+    created_at = models.DateTimeField(default=timezone.now)
+
 class SessionToken(models.Model):
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
     hashed_token = models.CharField(max_length=128, unique=True)

@@ -18,14 +18,6 @@ class Account(models.Model):
     status = models.CharField(max_length=10, choices=AccountStatus.choices, default=AccountStatus.OK)
     authenticated = models.BooleanField(default=False)
 
-class EmailAuthenticationToken(models.Model):
-    account = models.ForeignKey(Account, on_delete=models.CASCADE)
-    hashed_token = models.CharField(max_length=128, db_index=True)
-    consumed = models.BooleanField(default=False)
-    purpose = models.CharField(max_length=20, choices=EmailTokenPurpose.choices, default=EmailTokenPurpose.VERIFY)
-    expire_at = models.DateTimeField()
-    created_at = models.DateTimeField(default=timezone.now)
-
 # Previously used emails:
 class EmailHistoryLog(models.Model):
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
@@ -39,14 +31,6 @@ class SessionToken(models.Model):
     encrypted_country = models.TextField()
     expiry_date = models.DateTimeField()
     creation_date = models.DateTimeField(default=timezone.now)
-
-class TwoFASecret(models.Model):
-    account = models.ForeignKey(Account, on_delete=models.CASCADE)
-    encrypted_twofa_code = models.CharField(max_length=512)
-
-class TwoFABackup(models.Model):
-    otp_secret = models.ForeignKey(TwoFASecret, on_delete=models.CASCADE)
-    hashed_backup_code = models.CharField(max_length=128)
 
 class ServiceLog(models.Model):
     content = models.TextField()

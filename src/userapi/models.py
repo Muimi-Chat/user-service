@@ -17,6 +17,7 @@ class Account(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     status = models.CharField(max_length=10, choices=AccountStatus.choices, default=AccountStatus.OK)
     authenticated = models.BooleanField(default=False)
+    totp_enabled = models.BooleanField(default=False)
 
 # Previously used emails:
 class EmailHistoryLog(models.Model):

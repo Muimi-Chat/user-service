@@ -2,6 +2,7 @@ from django.urls import path
 
 from . import routers
 from . import totp_routers
+from . import user_routers
 
 urlpatterns = [
     path("register", routers.register, name="register"),
@@ -14,4 +15,10 @@ urlpatterns = [
     path("enable-totp/", totp_routers.enable_totp, name="enable_totp"),
     path("confirm-totp/", totp_routers.confirm_totp, name="confirm_totp"),
     path("disable-totp/", totp_routers.disable_totp, name="disable_totp"),
+
+    path("request-user-info/", user_routers.request_user_info, name="request_user_info"),
+    path("change-email/", user_routers.change_email, name="change_email"),
+    path("change-password/", user_routers.change_password, name="change_password"),
+    path("confirm-email-change/", user_routers.confirm_email_change, name="confirm_email_change"),
+    path("revoke-session/", user_routers.revoke_session, name="revoke_session"),
 ]

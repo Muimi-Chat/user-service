@@ -289,3 +289,24 @@ def change_password(request):
     return JsonResponse({
         'status': 'SUCCESS'
     })
+
+@csrf_exempt
+def revoke_session(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'ERROR'}, status=404)
+
+    data = json.loads(request.body)
+
+    session_token = request.headers.get('session-token', '')
+    user_agent = request.META['HTTP_USER_AGENT']
+    username = data.get('username', '')
+    session_id = data.get('session_id', '')
+
+    account = validate_session_token(username, user_agent, session_token)
+    if account is None:
+        return JsonResponse({'status': 'BAD_SESSION_TOKEN'}, status=401)
+
+    SessionToken.objects.filter(account=account, id=session_id).delete()
+    return JsonResponse({
+        'status': 'SUCCESS'
+    })

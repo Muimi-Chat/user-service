@@ -3,6 +3,7 @@ from django.urls import path
 from . import routers
 from . import totp_routers
 from . import user_routers
+from . import forgot_password_routers
 
 urlpatterns = [
     path("register", routers.register, name="register"),
@@ -21,4 +22,7 @@ urlpatterns = [
     path("change-password/", user_routers.change_password, name="change_password"),
     path("confirm-email-change/", user_routers.confirm_email_change, name="confirm_email_change"),
     path("revoke-session/", user_routers.revoke_session, name="revoke_session"),
+
+    path("reset-password/", forgot_password_routers.send_forgot_password_email, name="reset_password"),
+    path("confirm-password-reset/", forgot_password_routers.confirm_password_reset, name="confirm_password_reset"),
 ]

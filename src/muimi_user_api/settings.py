@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
 ]
 
 CSRF_TRUSTED_ORIGINS = [
@@ -52,6 +53,20 @@ CSRF_TRUSTED_ORIGINS = [
     'https://localhost',
     'http://' + CLIENT_HOST_ADDRESS,
     'https://' + CLIENT_HOST_ADDRESS
+]
+
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+    "service-token",
+    "session-token"
 ]
 
 CORS_ORIGIN_ALLOW_ALL = True

@@ -12,12 +12,11 @@ def request_decrypt(id: str, content: str, metadata: str = ""):
         'Authorization': authorization_key
     }
     data = {
-        'id': id,
+        'id': str(id),
         'content': content,
-        'metadata': metadata
+        'metadata': str(metadata)
     }
 
     response = requests.post(url, headers=headers, data=data)
     data = response.json()
-    print(data, flush=True)
     return data['decryptedContent']

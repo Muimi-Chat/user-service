@@ -4,6 +4,7 @@ import uuid
 
 from .enums.log_severity import LogSeverity
 from .enums.account_status import AccountStatus
+from .enums.email_token_purpose import EmailTokenPurpose
 
 class Account(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -16,11 +17,12 @@ class Account(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     status = models.CharField(max_length=10, choices=AccountStatus.choices, default=AccountStatus.OK)
     authenticated = models.BooleanField(default=False)
+    totp_enabled = models.BooleanField(default=False)
 
-class EmailAuthenticationToken(models.Model):
+# Previously used emails:
+class EmailHistoryLog(models.Model):
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
-    hashed_token = models.CharField(max_length=128, db_index=True)
-    expire_at = models.DateTimeField()
+    encrypted_email = models.CharField(max_length=256)
     created_at = models.DateTimeField(default=timezone.now)
 
 class SessionToken(models.Model):
@@ -30,14 +32,6 @@ class SessionToken(models.Model):
     encrypted_country = models.TextField()
     expiry_date = models.DateTimeField()
     creation_date = models.DateTimeField(default=timezone.now)
-
-class TwoFASecret(models.Model):
-    account = models.ForeignKey(Account, on_delete=models.CASCADE)
-    encrypted_twofa_code = models.CharField(max_length=512)
-
-class TwoFABackup(models.Model):
-    otp_secret = models.ForeignKey(TwoFASecret, on_delete=models.CASCADE)
-    hashed_backup_code = models.CharField(max_length=128)
 
 class ServiceLog(models.Model):
     content = models.TextField()

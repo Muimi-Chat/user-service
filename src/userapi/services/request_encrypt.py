@@ -19,5 +19,4 @@ def request_encrypt(id: str, content: str, metadata: str = ""):
 
     response = requests.post(url, headers=headers, data=data)
     data = response.json()
-    print(data, flush=True)
     return data['encryptedContent']

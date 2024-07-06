@@ -1,14 +1,25 @@
 import os
 import json
+import uuid
+import traceback
 
+from django.utils import timezone
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import csrf_exempt
 from django.core.cache import cache
 
-from .utils.validate_cloudflare_token import validate_cloudflare_token
+from .utils.verify_password import verify_password
+from .utils.generate_verification_url import generate_verification_url
 
-from .models import ServiceLog
+from .services.send_email_with_content import send_email_with_content
+from .services.verify_email_verification_token import verify_email_verification_token
+from .services.validate_cloudflare_token import validate_cloudflare_token
+from .services.request_decrypt import request_decrypt
+from .services.generate_email_verification_token import generate_email_verification_token
+
+from .models import ServiceLog, Account
+
 from .enums.log_severity import LogSeverity
 
 from .controllers import handle_registration, handle_login, validate_session_token
@@ -141,3 +152,110 @@ def get_user_info(request):
         return JsonResponse({'status': 'USERNAME_NOT_FOUND'}, status=401)
     
     return JsonResponse({'status': 'SUCCESS', 'uuid': account.id, 'user_status': account.status, 'deleted': account.deleted, 'authenticated': account.authenticated}, status=200)
+
+@csrf_exempt
+def resend_email_verification(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'ERROR'}, status=404)
+    
+    data = json.loads(request.body)
+
+    username = data.get('username', '')
+    ip_address = request.META.get('REMOTE_ADDR', '')
+    cloudflare_token = data.get('cloudflare_token', '')
+    csrf_token = request.headers.get('X-CSRFToken', '')
+    user_agent = request.META['HTTP_USER_AGENT']
+    csrf_status = _verify_csrf(csrf_token, user_agent, ip_address)
+    if not csrf_status is None:
+        return csrf_status
+
+    if not validate_cloudflare_token(cloudflare_token, ip_address):
+        return JsonResponse({'status': 'INVALID_CLOUDFLARE_TOKEN'}, status=401)
+    
+    account = Account.objects.get(username=username)
+    if account.authenticated:
+        return JsonResponse({'status': 'ALREADY_AUTHENTICATED'}, status=403)
+
+    has_send_token_recently = cache.get(f"email_verification_{str(account.id)}")
+    if has_send_token_recently is not None:
+        return JsonResponse({'status': 'WAIT_BEFORE_SENDING'}, status=403)
+
+    email = request_decrypt(str(account.id), account.encrypted_email, str(account.id))
+    try:
+        # Generate email verification token
+        response = generate_email_verification_token(str(account.id))
+        if response['status'] != "SUCCESS":
+            return JsonResponse({'status': 'ERROR'}, status=500)
+        
+        # Send email with verification URL
+        verification_token = response['verificationToken']
+        token_id = str(response['tokenID'])
+
+        verification_url = generate_verification_url(token_id, verification_token)
+        email_content = f"Heres your verification URL: <a href={verification_url}>{verification_url}</a><br><br>It will expire in 1 hour."
+        email_header = "Muimi Email Verification"
+
+        response = send_email_with_content(email, email_header, email_content)
+        if not response['success']:
+            return JsonResponse({'status': 'ERROR'}, status=500)
+        cache.set(f"email_verification_{str(account.id)}", True, timeout=120)
+
+    except Exception as e:
+        log_message = f"Tried to send verification email to {email}, but failed due to :: {e}\n\n{traceback.format_exc()}"
+        print(log_message, flush=True)
+        log = ServiceLog.objects.create(
+            content=log_message,
+            severity=LogSeverity.ERROR
+        )
+        log.save()
+        return JsonResponse({'status': 'ERROR'}, status=500)
+
+    return JsonResponse({'status': 'SUCCESS'})
+
+@csrf_exempt
+def accept_email_token(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'ERROR'}, status=404)
+    
+    data = json.loads(request.body)
+
+    token = data.get('token', '')
+    token_id = data.get('id', '')
+    
+    ip_address = request.META.get('REMOTE_ADDR', '')
+    cloudflare_token = data.get('cloudflare_token', '')
+    csrf_token = request.headers.get('X-CSRFToken', '')
+    user_agent = request.META['HTTP_USER_AGENT']
+    csrf_status = _verify_csrf(csrf_token, user_agent, ip_address)
+    if not csrf_status is None:
+        return csrf_status
+
+    if not validate_cloudflare_token(cloudflare_token, ip_address):
+        return JsonResponse({'status': 'INVALID_CLOUDFLARE_TOKEN'}, status=401)
+
+    account = None
+    try:
+        result = verify_email_verification_token(token_id, token)
+        if not result['valid']:
+            return JsonResponse({'status': 'INVALID_TOKEN'}, status=401)
+        
+        account_id = uuid.UUID(result['accountID'])
+        account = Account.objects.get(id=account_id)
+    except Exception as e:
+        print(e, flush=True)
+        log = ServiceLog.objects.create(
+            content=f"Failed to verify email verification token due to :: {e}",
+            severity=LogSeverity.ERROR
+        )
+        return JsonResponse({'status': 'TOKEN_NOT_FOUND'}, status=404)
+
+    account.authenticated = True
+    account.save()
+    
+    log = ServiceLog.objects.create(
+        content=f"{account.username} ({account.id}) accepted email token.",
+        severity=LogSeverity.LOG
+    )
+    log.save()
+
+    return JsonResponse({'status': 'SUCCESS'}, status=200)

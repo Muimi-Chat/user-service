@@ -23,10 +23,14 @@ from .utils.hash_password import hash_password
 from .utils.is_valid_email import is_valid_email
 from .utils.is_valid_password import is_valid_password
 from .utils.verify_password import verify_password
-from .utils.get_country_from_ip import get_country_from_ip
+from .utils.generate_verification_url import generate_verification_url
 
-from .utils.request_encrypt import request_encrypt
-from .utils.request_decrypt import request_decrypt
+from .services.get_country_from_ip import get_country_from_ip
+from .services.generate_email_verification_token import generate_email_verification_token
+from .services.request_encrypt import request_encrypt
+from .services.request_decrypt import request_decrypt
+from .services.send_email_with_content import send_email_with_content
+from .services.verify_totp_code import verify_totp_code
 
 from argon2.exceptions import VerifyMismatchError
 from argon2 import PasswordHasher
@@ -134,22 +138,59 @@ def handle_login(username, password, second_fa_code, user_agent, ip_address):
         account = Account.objects.get(username=username)
         if account is None:
             return JsonResponse({'status': 'BAD_USERNAME'}, status=401)
+        
+        if not account.authenticated:
+            return JsonResponse({'status': 'NOT_EMAIL_VERIFIED'}, status=400)
+        
+        # Check if TOTP enabled, and handle...
+        if account.totp_enabled and not second_fa_code:
+            return JsonResponse({'status': 'TOTP_ENABLED'}, status=403)
 
         if not verify_password(account.hashed_password, password):
             return JsonResponse({'status': 'BAD_PASSWORD'}, status=401)
 
         # TODO: Check if user is authenticated, ask user to authenticate email if not
         # TODO: Check if user setup 2fa, request 2fa if 2fa code not given
+        if not account.authenticated:
+            return JsonResponse({'status': 'NOT_EMAIL_AUTHENTICATED'}, status=400)
 
         if account.status == AccountStatus.BANNED:
             return JsonResponse({'status': 'BANNED'}, status=401)
         if account.status == AccountStatus.LOCKED:
             return JsonResponse({'status': 'LOCKED'}, status=401)
+    
+        if account.totp_enabled:
+            verify_result = verify_totp_code(account.id, second_fa_code)
+            verify_status = verify_result['status']
+            if verify_status != 'SUCCESS':
+                return JsonResponse({'status': 'ERROR'}, status=500)
+            elif verify_status == "NO_TOKEN_SET":
+                log = ServiceLog.objects.create(
+                    content=f"Auth service mismatch with {account.username} ({account.id}); Where TOTP was enabled, but auth service deemed it not to be!",
+                    severity=LogSeverity.CRITICAL
+                )
+                log.save()
+                account.totp_enabled = False
+                account.save()
+            elif not verify_result['valid']:
+                return JsonResponse({'status': 'BAD_TOTP'}, status=401)
+        
 
-        # TODO: Determine if suspicious if was not previously one of the logged in countries
         country = get_country_from_ip(ip_address)
         session_token = secrets.token_urlsafe(32)
         _insert_session_token(session_token, account, user_agent, country)
+
+        try:
+            email = request_decrypt(account.id, account.encrypted_email, account.id)
+            send_email_with_content(email, 'New Login!', f'Hello, we let you know you logged in at {country}!')
+        except Exception as e:
+            print(e, flush=True)
+            log = ServiceLog.objects.create(
+                content=f"Failed to notify login activity to {account.username} ({account.id}) due to :: {e}",
+                severity=LogSeverity.ERROR
+            )
+            log.save()
+
         return JsonResponse({'status': 'SUCCESS', 'token': session_token}, status=200)
     except ObjectDoesNotExist:
         return JsonResponse({'status': 'BAD_USERNAME'}, status=401)
@@ -182,6 +223,35 @@ def handle_registration(username, email, password):
         encrypted_email = request_encrypt(str(generated_uuid), email, str(generated_uuid))
         hashed_password = hash_password(password)
 
+        try:
+            # Generate email verification token
+            response = generate_email_verification_token(str(generated_uuid))
+            if response['status'] != "SUCCESS":
+                return JsonResponse({'status': 'ERROR'}, status=500)
+            
+            # Send email with verification URL
+            verification_token = response['verificationToken']
+            token_id = str(response['tokenID'])
+
+            verification_url = generate_verification_url(token_id, verification_token)
+            email_content = f"Heres your verification URL: <a href={verification_url}>{verification_url}</a><br><br>It will expire in 1 hour."
+            email_header = "Muimi Email Verification"
+
+            response = send_email_with_content(email, email_header, email_content)
+            if not response['success']:
+                return JsonResponse({'status': 'ERROR'}, status=500)
+            cache.set(f"email_verification_{str(generated_uuid)}", True, timeout=120)
+
+        except Exception as e:
+            log_message = f"Tried to send verification email to {email}, but failed due to :: {e}\n\n{traceback.format_exc()}"
+            print(log_message, flush=True)
+            log = ServiceLog.objects.create(
+                content=log_message,
+                severity=LogSeverity.ERROR
+            )
+            log.save()
+            return JsonResponse({'status': 'ERROR'}, status=500)
+
         # Attempt to insert into database
         account = Account.objects.create(
             id=generated_uuid,
@@ -192,13 +262,12 @@ def handle_registration(username, email, password):
         )
         account.save()
 
-        # TODO: Setup authentication email
-
         log = ServiceLog.objects.create(
             content=f"New user {username} created with uuid {account.id}.",
             severity=LogSeverity.LOG
         )
         log.save()
+
         return JsonResponse({'status': 'SUCCESS'})
     except IntegrityError as e:
         # If username/email conflict

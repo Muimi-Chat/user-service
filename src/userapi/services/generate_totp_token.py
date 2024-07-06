@@ -16,5 +16,6 @@ def generate_totp_token(userID, username):
     }
 
     response = requests.post(url, headers=headers, data=data)
+    print(response, flush=True)
     result = response.json()
     return result

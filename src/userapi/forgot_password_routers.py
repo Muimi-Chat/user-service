@@ -124,7 +124,7 @@ def send_forgot_password_email(request):
         return JsonResponse({'status': 'ACCOUNT_DISABLED'}, status=401)
     
     has_request_reset_recently = cache.get(f"email_verification_{str(account.id)}")
-    if has_request_reset_recently is not None and False:
+    if has_request_reset_recently is not None:
         return JsonResponse({'status': 'WAIT_BEFORE_SENDING'}, status=403)
     
     email = request_decrypt(account.id, account.encrypted_email, account.id)

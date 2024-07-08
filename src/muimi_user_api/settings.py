@@ -32,6 +32,7 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     'localhost',
     'user-api',
+    'chat-api'
 ]
 
 
@@ -52,7 +53,9 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost',
     'https://localhost',
     'http://' + CLIENT_HOST_ADDRESS,
-    'https://' + CLIENT_HOST_ADDRESS
+    'https://' + CLIENT_HOST_ADDRESS,
+    'http://chat-api',
+    'https://chat-api'
 ]
 
 CORS_ALLOW_HEADERS = [

@@ -6,6 +6,7 @@ from . import user_routers
 from . import forgot_password_routers
 
 urlpatterns = [
+    path("logout/", routers.logout, name="logout"),
     path("register", routers.register, name="register"),
     path("login", routers.login, name="login"),
     path('csrf_token/', routers.request_registration_csrf, name='get_csrf_token'),

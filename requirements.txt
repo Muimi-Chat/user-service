@@ -8,3 +8,4 @@ cryptography===42.0.8
 django-cors-headers===4.3.1
 pytz===2024.1 
 requests===2.32.2
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
